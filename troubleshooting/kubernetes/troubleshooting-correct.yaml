@@ -1,0 +1,86 @@
+kind: RuntimeClass
+apiVersion: node.k8s.io/v1
+metadata:
+  name: rc-overhead
+handler: docker
+overhead:
+  podFixed:
+    memory: "0Mi"
+    cpu: "0m"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: troubleshooting
+  labels:
+    app: troubleshooting
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: troubleshooting
+  template:
+    metadata:
+      labels:
+        app: troubleshooting
+    spec:
+      runtimeClassName: rc-overhead
+      containers:
+      - name: troubleshooting
+        image: smuu/troubleshooting-app:v1.0.1
+        imagePullPolicy: Always
+        ports:
+        - name: http
+          containerPort: 80
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "150m"
+          limits:
+            memory: "128Mi"
+            cpu: "150m"
+        startupProbe:
+          httpGet:
+            path: /livez
+            port: 80
+          failureThreshold: 10
+          initialDelaySeconds: 1
+          periodSeconds: 1
+        livenessProbe:
+          httpGet:
+            path: /livez
+            port: 80
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 80
+        args: ['/app/app.py']
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: troubleshooting
+spec:
+  selector:
+    app: troubleshooting
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: http
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: troubleshooting
+spec:
+  rules:
+  - host: ""
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: troubleshooting
+            port:
+              number: 80

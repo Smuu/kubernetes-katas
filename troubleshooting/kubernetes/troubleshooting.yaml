@@ -1,0 +1,100 @@
+kind: RuntimeClass
+apiVersion: node.k8s.io/v1
+metadata:
+  name: rc-overhead
+handler: docker
+overhead:
+  podFixed:
+    memory: "10Gi"
+    cpu: "5"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: troubleshooting
+  labels:
+    app: troubleshooting
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app: troubleshooting
+  template:
+    metadata:
+      labels:
+        app: troubleshooting
+    spec:
+      runtimeClassName: rc-overhead
+      containers:
+      - name: troubleshooting
+        image: smuu/troubleshooting-appp:v0.0.1
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+          name: web
+        resources:
+          requests:
+            memory: "8Mi"
+            cpu: "25m"
+          limits:
+            memory: "16Mi"
+            cpu: "50m"
+        startupProbe:
+          httpGet:
+            path: /livez
+            port: 80
+          failureThreshold: 1
+          initialDelaySeconds: 1
+          periodSeconds: 1
+        livenessProbe:
+          httpGet:
+            path: /livez
+            port: 80
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 80
+        args: ['/app/application.py']
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: troubleshooting
+spec:
+  selector:
+    app: troubleshooting-pod
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: web
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: troubleshooting
+spec:
+  rules:
+  - http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: troubleshooting-service
+            port:
+              number: 8080
+---
+apiVersion: v1
+metadata:
+  name: netshoot
+kind: Pod
+spec:
+  containers:
+  - name: netshoot
+    image: nicolaka/netshoot
+    command: ["sleep"]
+    args: ["3600"]
+    imagePullPolicy: Always
+    securityContext:
+      capabilities:
+        add: ["NET_BIND_SERVICE"]
